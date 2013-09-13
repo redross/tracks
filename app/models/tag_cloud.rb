@@ -24,6 +24,10 @@ class TagCloud
     @max ||= tag_counts.max || 0
   end
 
+  def relative_font_size(tag)
+    (9 + 2*(tag.count.to_i-min)/divisor)
+  end
+
   private
 
   def tag_query

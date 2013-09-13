@@ -2,58 +2,50 @@
 #  http://www.juixe.com/techknow/index.php/2006/07/15/acts-as-taggable-tag-cloud/
 
 class TagCloud
-  attr_reader :user, :tags, :min, :divisor, :tags_90days, :min_90days, :divisor_90days
-
   def initialize(user, options = {})
     @user = user
     @cut_off = options[:cut_off]
+    @levels=10
   end
 
-  # TODO: parameterize limit
-  def compute
-    levels=10
+  def divisor
+    @divisor ||= ((max - min) / @levels) + 1
+  end
 
-    query = "SELECT tags.id, name, count(*) AS count"
-    query << " FROM taggings, tags, todos"
-    query << " WHERE tags.id = tag_id"
-    query << " AND taggings.taggable_id = todos.id"
-    query << " AND todos.user_id="+user.id.to_s+" "
-    query << " AND taggings.taggable_type='Todo' "
-    query << " GROUP BY tags.id, tags.name"
-    query << " ORDER BY count DESC, name"
-    query << " LIMIT 100"
-    @tags = Tag.find_by_sql(query).sort_by { |tag| tag.name.downcase }
+  def tags
+    @tags ||= tag_query.sort_by { |tag| tag.name.downcase }
+  end
 
-    max, @min = 0, 0
-    @tags.each { |t|
-      max = [t.count.to_i, max].max
-      @min = [t.count.to_i, @min].min
-    }
+  def min
+    @min ||= 0 || tag_counts.min
+  end
 
-    @divisor = ((max - @min) / levels) + 1
+  def max
+    @max ||= tag_counts.max || 0
+  end
 
-    query = "SELECT tags.id, tags.name AS name, count(*) AS count"
-    query << " FROM taggings, tags, todos"
-    query << " WHERE tags.id = tag_id"
-    query << " AND todos.user_id=? "
-    query << " AND taggings.taggable_type='Todo' "
-    query << " AND taggings.taggable_id=todos.id "
-    query << " AND (todos.created_at > ? OR "
-    query << "      todos.completed_at > ?) "
-    query << " GROUP BY tags.id, tags.name"
-    query << " ORDER BY count DESC, name"
-    query << " LIMIT 100"
-    @tags_90days = Tag.find_by_sql(
-      [query, user.id, @cut_off, @cut_off]
-    ).sort_by { |tag| tag.name.downcase }
+  private
 
-    max_90days, @min_90days = 0, 0
-    @tags_90days.each { |t|
-      max_90days = [t.count.to_i, max_90days].max
-      @min_90days = [t.count.to_i, @min_90days].min
-    }
+  def tag_query
+    Tag.select('tags.id, name, count(*) AS count').
+        from('taggings, tags, todos').
+        where('tags.id = tag_id').
+        where('taggings.taggable_id = todos.id').
+        where("todos.user_id= #{@user.id}").
+        where('taggings.taggable_type="Todo"').
+        where(cutoff_condition).
+        group('tags.id, tags.name').
+        order('count DESC, name').
+        limit(100)
+  end
 
-    @divisor_90days = ((max_90days - @min_90days) / levels) + 1
-    return self
+  def cutoff_condition
+    return nil if @cut_off.nil?
+
+    ["(todos.created_at > :cut_off OR todos.completed_at > :cut_off)", cut_off: @cut_off]
+  end
+
+  def tag_counts
+    @tag_counts ||= tags.map {|tag| tag.count.to_i }
   end
 end

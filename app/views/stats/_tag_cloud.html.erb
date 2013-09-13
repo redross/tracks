@@ -1,0 +1,10 @@
+<% if tag_cloud.tags.size < 1 %>
+  <%= t('stats.no_tags_available') %>
+<% else %>
+  <% tag_cloud.tags.each do |tag| %>
+    <% tag_style = "font-size: #{(9 + 2*(tag.count.to_i-tag_cloud.min)/tag_cloud.divisor)}pt" %>
+    <% tag_title = "tag.count.to_s #{t('common.actions_midsentence', count: tag.count)}" %>
+
+    <%= link_to tag.name, tag_path(tag.name), style: tag_style, title: tag_title -%>
+  <% end -%>
+<% end -%>
